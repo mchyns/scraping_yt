@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Tentang{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Tentang Sistem</h2>
+    <p><strong>Sistem Analisis Sentimen Komentar YouTube</strong></p>
+    <p>Sistem ini dibuat untuk BPS (Badan Pusat Statistik) untuk melakukan analisis sentimen pada komentar YouTube.</p>
+    
+    <h3 style="margin-top:30px;">Metode Analisis:</h3>
+    <ul style="padding-left:20px;">
+        <li><strong>Lexicon-Based:</strong> Menggunakan kamus kata positif/negatif</li>
+        <li><strong>VADER:</strong> Valence Aware Dictionary for Sentiment Reasoning</li>
+        <li><strong>TextBlob:</strong> Library NLP untuk analisis sentimen</li>
+        <li><strong>Rule-Based:</strong> Kombinasi metode dengan aturan kustom</li>
+    </ul>
+    
+    <h3 style="margin-top:30px;">Fitur:</h3>
+    <ul style="padding-left:20px;">
+        <li>Scraping komentar YouTube dengan API</li>
+        <li>Analisis sentimen dengan 4 metode</li>
+        <li>Perbandingan hasil metode</li>
+        <li>Export data ke Excel</li>
+    </ul>
+</div>
+{% endblock %}

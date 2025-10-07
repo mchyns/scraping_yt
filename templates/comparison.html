@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Perbandingan Metode{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Perbandingan Metode Analisis</h2>
+    <div id="comparison-content"></div>
+</div>
+<script>
+async function loadComparison() {
+    const response = await fetch('/get_analysis_results');
+    const data = await response.json();
+    if (!data.success) {
+        document.getElementById('comparison-content').innerHTML = '<p>Belum ada hasil analisis. Lakukan analisis terlebih dahulu!</p>';
+        return;
+    }
+    
+    const results = data.results;
+    let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr><th>Metode</th><th>Positif</th><th>Negatif</th><th>Netral</th></tr></thead><tbody>';
+    
+    for (const [method, stats] of Object.entries(results.summary)) {
+        html += `<tr style="border-bottom:1px solid #ddd;">
+            <td style="padding:10px;">${method}</td>
+            <td style="padding:10px;">${stats.positive}</td>
+            <td style="padding:10px;">${stats.negative}</td>
+            <td style="padding:10px;">${stats.neutral}</td>
+        </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('comparison-content').innerHTML = html;
+}
+loadComparison();
+</script>
+{% endblock %}

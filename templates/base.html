@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Analisis Sentimen YouTube{% endblock %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        /* Navbar */
+        .navbar {
+            background-color: #2c3e50;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .navbar-brand {
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+            padding: 15px 0;
+            text-decoration: none;
+        }
+
+        .navbar-menu {
+            display: flex;
+            list-style: none;
+            gap: 5px;
+        }
+
+        .navbar-menu li a {
+            color: white;
+            text-decoration: none;
+            padding: 15px 20px;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .navbar-menu li a:hover {
+            background-color: #34495e;
+        }
+
+        .navbar-menu li a.active {
+            background-color: #3498db;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+
+        /* Buttons */
+        .btn {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+        }
+
+        .btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+        }
+
+        .btn-success:hover {
+            background-color: #229954;
+        }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+        }
+
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-error {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .alert-success {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .alert-info {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .alert-warning {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            color: #7f8c8d;
+            font-size: 14px;
+            background-color: white;
+            border-top: 1px solid #ecf0f1;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar-container {
+                flex-direction: column;
+            }
+
+            .navbar-menu {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .navbar-menu li a {
+                text-align: center;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="/" class="navbar-brand">Analisis Sentimen YouTube</a>
+            <ul class="navbar-menu">
+                <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
+                <li><a href="/analysis" class="{% if request.path == '/analysis' %}active{% endif %}">Analisis</a></li>
+                <li><a href="/comments" class="{% if request.path == '/comments' %}active{% endif %}">Komentar</a></li>
+                <li><a href="/comparison" class="{% if request.path == '/comparison' %}active{% endif %}">Perbandingan</a></li>
+                <li><a href="/about" class="{% if request.path == '/about' %}active{% endif %}">Tentang</a></li>
+                <li><a href="#" onclick="showQuickAnalysis(); return false;" style="background-color: #27ae60;">💬 Coba Sekarang</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Quick Analysis Modal -->
+    <div id="quick-analysis-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; overflow-y: auto;">
+        <div style="position: relative; width: 800px; max-width: 95%; margin: 30px auto; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;">
+            <button onclick="closeQuickAnalysis()" style="position: absolute; top: 15px; right: 15px; background: #e74c3c; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; font-weight: bold; z-index: 1;">×</button>
+            
+            <h2 style="color: #2c3e50; margin-bottom: 10px;">✨ Analisis Cepat Sentimen</h2>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Masukkan komentar untuk analisis instant dengan 4 metode ML!</p>
+            
+            <!-- History Section -->
+            <div id="quick-history-section" style="margin-bottom: 20px; display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="color: #2c3e50; font-size: 16px; margin: 0;">📚 Riwayat Analisis</h3>
+                    <button onclick="clearAllHistory()" style="background: #e74c3c; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Hapus Semua</button>
+                </div>
+                <div id="quick-history-list" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f8f9fa;">
+                    <!-- History items will be inserted here -->
+                </div>
+            </div>
+            
+            <textarea id="quick-comment-input" placeholder="Contoh: Videonya sangat bagus dan bermanfaat..." style="width: 100%; height: 100px; padding: 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; margin-bottom: 15px;"></textarea>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button onclick="analyzeQuickComment()" id="quick-analyze-btn" class="btn" style="flex: 1;">🔍 Analisis Sekarang</button>
+                <button onclick="saveCurrentResult()" id="quick-save-btn" class="btn" style="flex: 1; background: #27ae60; display: none;">� Simpan Hasil</button>
+            </div>
+            
+            <div id="quick-results" style="display: none; margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: #2c3e50; margin: 0;">Hasil Analisis:</h3>
+                    <span id="quick-result-time" style="font-size: 12px; color: #7f8c8d;"></span>
+                </div>
+                <div id="quick-results-content" style="max-height: 500px; overflow-y: auto;"></div>
+            </div>
+            
+            <div id="quick-loading" style="display: none; text-align: center; padding: 20px;">
+                <div class="spinner"></div>
+                <p>Menganalisis sentimen...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Storage for analysis history
+        let analysisHistory = [];
+        let currentAnalysis = null;
+        
+        // Load history from localStorage on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const saved = localStorage.getItem('quickAnalysisHistory');
+            if (saved) {
+                analysisHistory = JSON.parse(saved);
+                if (analysisHistory.length > 0) {
+                    document.getElementById('quick-history-section').style.display = 'block';
+                    renderHistory();
+                }
+            }
+        });
+        
+        function showQuickAnalysis() {
+            document.getElementById('quick-analysis-modal').style.display = 'block';
+            document.getElementById('quick-comment-input').focus();
+            if (analysisHistory.length > 0) {
+                document.getElementById('quick-history-section').style.display = 'block';
+                renderHistory();
+            }
+        }
+        
+        function closeQuickAnalysis() {
+            document.getElementById('quick-analysis-modal').style.display = 'none';
+        }
+        
+        function clearAllHistory() {
+            if (confirm('Hapus semua riwayat analisis?')) {
+                analysisHistory = [];
+                localStorage.removeItem('quickAnalysisHistory');
+                document.getElementById('quick-history-section').style.display = 'none';
+                document.getElementById('quick-history-list').innerHTML = '';
+            }
+        }
+        
+        function deleteHistoryItem(index) {
+            if (confirm('Hapus hasil analisis ini?')) {
+                analysisHistory.splice(index, 1);
+                localStorage.setItem('quickAnalysisHistory', JSON.stringify(analysisHistory));
+                renderHistory();
+                if (analysisHistory.length === 0) {
+                    document.getElementById('quick-history-section').style.display = 'none';
+                }
+            }
+        }
+        
+        function loadHistoryItem(index) {
+            const item = analysisHistory[index];
+            currentAnalysis = item;
+            document.getElementById('quick-comment-input').value = item.original;
+            displayQuickResults(item);
+            document.getElementById('quick-save-btn').style.display = 'none'; // Already saved
+        }
+        
+        function renderHistory() {
+            const historyList = document.getElementById('quick-history-list');
+            if (analysisHistory.length === 0) {
+                historyList.innerHTML = '<p style="text-align: center; color: #7f8c8d; margin: 0;">Belum ada riwayat</p>';
+                return;
+            }
+            
+            let html = '';
+            analysisHistory.forEach((item, index) => {
+                const preview = item.original.substring(0, 50) + (item.original.length > 50 ? '...' : '');
+                const sentiments = Object.values(item.sentiments);
+                const avgSentiment = sentiments[0]?.label || 'Unknown';
+                
+                let color = '#95a5a6';
+                let icon = '😐';
+                if (avgSentiment.toLowerCase().includes('positif')) {
+                    color = '#27ae60';
+                    icon = '😊';
+                } else if (avgSentiment.toLowerCase().includes('negatif')) {
+                    color = '#e74c3c';
+                    icon = '😞';
+                }
+                
+                html += `
+                    <div style="background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border-left: 4px solid ${color}; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1; cursor: pointer;" onclick="loadHistoryItem(${index})">
+                            <div style="font-size: 12px; color: #7f8c8d; margin-bottom: 3px;">${item.timestamp}</div>
+                            <div style="font-size: 13px; color: #2c3e50;">${icon} ${preview}</div>
+                        </div>
+                        <button onclick="deleteHistoryItem(${index}); event.stopPropagation();" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 10px;">🗑️</button>
+                    </div>
+                `;
+            });
+            
+            historyList.innerHTML = html;
+        }
+        
+        function saveCurrentResult() {
+            if (!currentAnalysis) {
+                alert('Tidak ada hasil untuk disimpan!');
+                return;
+            }
+            
+            // Check if already exists
+            const exists = analysisHistory.some(item => 
+                item.original === currentAnalysis.original && 
+                item.preprocessed === currentAnalysis.preprocessed
+            );
+            
+            if (exists) {
+                if (!confirm('Hasil analisis untuk teks ini sudah ada. Timpa dengan hasil baru?')) {
+                    return;
+                }
+                // Remove old one
+                analysisHistory = analysisHistory.filter(item => 
+                    item.original !== currentAnalysis.original || 
+                    item.preprocessed !== currentAnalysis.preprocessed
+                );
+            }
+            
+            // Add timestamp
+            currentAnalysis.timestamp = new Date().toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Add to history (newest first)
+            analysisHistory.unshift(currentAnalysis);
+            
+            // Keep only last 20 items
+            if (analysisHistory.length > 20) {
+                analysisHistory = analysisHistory.slice(0, 20);
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('quickAnalysisHistory', JSON.stringify(analysisHistory));
+            
+            // Show history section
+            document.getElementById('quick-history-section').style.display = 'block';
+            renderHistory();
+            
+            // Hide save button
+            document.getElementById('quick-save-btn').style.display = 'none';
+            
+            alert('✅ Hasil analisis berhasil disimpan!');
+        }
+        
+        async function analyzeQuickComment() {
+            const comment = document.getElementById('quick-comment-input').value.trim();
+            
+            if (!comment) {
+                alert('Mohon masukkan komentar terlebih dahulu!');
+                return;
+            }
+            
+            const btn = document.getElementById('quick-analyze-btn');
+            const saveBtn = document.getElementById('quick-save-btn');
+            const loading = document.getElementById('quick-loading');
+            const results = document.getElementById('quick-results');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Menganalisis...';
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            saveBtn.style.display = 'none';
+            
+            try {
+                const response = await fetch('/analyze_single', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({comment: comment})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentAnalysis = data.results;
+                    displayQuickResults(data.results);
+                    saveBtn.style.display = 'block'; // Show save button after successful analysis
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Terjadi kesalahan: ' + error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 Analisis Sekarang';
+                loading.style.display = 'none';
+            }
+        }
+        
+        function displayQuickResults(data) {
+            const resultsDiv = document.getElementById('quick-results-content');
+            const resultTime = document.getElementById('quick-result-time');
+            const sentiments = data.sentiments;
+            
+            // Set timestamp
+            if (data.timestamp) {
+                resultTime.textContent = data.timestamp;
+            } else {
+                resultTime.textContent = new Date().toLocaleString('id-ID', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+            
+            let html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">';
+            html += '<strong>Teks Asli:</strong><br><span style="color: #555; word-wrap: break-word;">' + data.original + '</span><br>';
+            html += '<strong style="margin-top: 10px; display: block;">Teks Terproses:</strong><br><span style="color: #555; font-style: italic; word-wrap: break-word;">' + data.preprocessed + '</span>';
+            html += '</div>';
+            
+            for (const [key, result] of Object.entries(sentiments)) {
+                const sentiment = result.label;
+                let color = '#95a5a6';  // Netral
+                let icon = '😐';
+                
+                if (sentiment.toLowerCase().includes('positif')) {
+                    color = '#27ae60';
+                    icon = '😊';
+                } else if (sentiment.toLowerCase().includes('negatif')) {
+                    color = '#e74c3c';
+                    icon = '😞';
+                }
+                
+                html += `
+                    <div style="background: white; border: 2px solid ${color}; border-radius: 8px; padding: 15px; text-align: center;">
+                        <div style="font-size: 12px; color: #7f8c8d; font-weight: bold; margin-bottom: 5px;">${result.name}</div>
+                        <div style="font-size: 32px; margin: 10px 0;">${icon}</div>
+                        <div style="font-size: 16px; font-weight: bold; color: ${color}; margin-bottom: 5px;">${sentiment}</div>
+                        <div style="font-size: 13px; color: #95a5a6;">Confidence: ${(result.score * 100).toFixed(1)}%</div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+            document.getElementById('quick-results').style.display = 'block';
+            
+            // Scroll to results
+            document.getElementById('quick-results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('quick-analysis-modal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeQuickAnalysis();
+            }
+        });
+    </script>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <footer>
+        <p>Sistem Analisis Sentimen Komentar YouTube - BPS 2025</p>
+        <p style="margin-top: 5px; font-size: 12px;">Menggunakan 4 Metode Machine Learning: Naive Bayes, SVM, LSTM, IndoBERT</p>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

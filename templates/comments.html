@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+{% block title %}Semua Komentar{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Modal Preprocessing */
+    .preprocessing-modal {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.6);
+        backdrop-filter: blur(3px);
+    }
+    
+    .preprocessing-modal-content {
+        background-color: #fefefe;
+        margin: 2% auto;
+        padding: 0;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 900px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        animation: slideDown 0.3s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .preprocessing-modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px 25px;
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .preprocessing-modal-body {
+        padding: 25px;
+    }
+    
+    .close-modal {
+        color: white;
+        font-size: 32px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+        line-height: 1;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+    
+    .close-modal:hover {
+        background: rgba(255,255,255,0.2);
+        transform: rotate(90deg);
+    }
+    
+    .process-step {
+        background: #f8f9fa;
+        padding: 18px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border: 2px solid #dee2e6;
+        transition: all 0.3s;
+    }
+    
+    .process-step:hover {
+        transform: translateX(5px);
+        box-shadow: -3px 3px 8px rgba(0,0,0,0.1);
+    }
+    
+    .process-step.highlight {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        border: 3px solid #ffc107;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .process-step.final {
+        background: linear-gradient(135deg, #d4edda 0%, #a8e6cf 100%);
+        border: 3px solid #28a745;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .step-title {
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .step-content {
+        background: white;
+        padding: 12px;
+        border-radius: 6px;
+        border-left: 4px solid #3498db;
+        color: #2c3e50;
+        line-height: 1.6;
+        word-wrap: break-word;
+    }
+    
+    .arrow-down {
+        text-align: center;
+        color: #3498db;
+        font-size: 24px;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    
+    .btn-process {
+        padding: 6px 14px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .btn-process:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 3px solid rgba(255,255,255,.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 0.8s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Semua Komentar</h2>
+    <div id="comments-list"></div>
+</div>
+
+<!-- Modal Preprocessing -->
+<div id="preprocessingModal" class="preprocessing-modal">
+    <div class="preprocessing-modal-content">
+        <div class="preprocessing-modal-header">
+            <div>
+                <h2 style="margin: 0;">🔬 Detail Preprocessing</h2>
+                <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;" id="modal-comment-author"></p>
+            </div>
+            <span class="close-modal" onclick="closePreprocessingModal()">&times;</span>
+        </div>
+        <div class="preprocessing-modal-body" id="modal-preprocessing-content">
+            <p style="text-align: center; color: #7f8c8d;">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadComments() {
+    // Load scraped data
+    const response = await fetch('/get_scraped_data');
+    const data = await response.json();
+    if (!data.success) {
+        document.getElementById('comments-list').innerHTML = '<p>Belum ada data. Lakukan scraping terlebih dahulu!</p>';
+        return;
+    }
+    
+    // Store comments globally for preprocessing
+    window.commentsData = data.data.comments;
+    
+    // Try to load analysis results for sentiment labels
+    let analysisResults = null;
+    try {
+        const analysisResponse = await fetch('/get_analysis_results');
+        const analysisData = await analysisResponse.json();
+        if (analysisData.success) {
+            analysisResults = analysisData.results.comments;
+        }
+    } catch (e) {
+        console.log('No analysis results yet');
+    }
+    
+    let html = '';
+    data.data.comments.forEach((comment, index) => {
+        // Get sentiment label if analysis exists
+        let sentimentBadge = '';
+        if (analysisResults && analysisResults[index]) {
+            const result = analysisResults[index];
+            // Get sentiment from any available method
+            let sentiment = result.naive_bayes_sentiment || result.svm_sentiment || result.lstm_sentiment || result.indobert_sentiment;
+            
+            if (sentiment) {
+                let badgeColor = '#95a5a6';  // Neutral (gray)
+                let badgeText = 'Netral';
+                let badgeIcon = '😐';
+                
+                if (sentiment.toLowerCase().includes('positif')) {
+                    badgeColor = '#27ae60';
+                    badgeText = 'Positif';
+                    badgeIcon = '😊';
+                } else if (sentiment.toLowerCase().includes('negatif')) {
+                    badgeColor = '#e74c3c';
+                    badgeText = 'Negatif';
+                    badgeIcon = '😞';
+                }
+                
+                sentimentBadge = `<span style="background: ${badgeColor}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-left: 10px;">${badgeIcon} ${badgeText}</span>`;
+            }
+        }
+        
+        html += `<div style="padding:15px; background:#f8f9fa; margin-bottom:10px; border-radius:8px; border-left: 4px solid #3498db;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="color: #2c3e50;">${index+1}. @${comment.author}</strong>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    ${sentimentBadge}
+                    <button class="btn-process" data-index="${index}">
+                        🔬 Lihat Proses
+                    </button>
+                </div>
+            </div>
+            <p style="margin: 10px 0; line-height: 1.6; color: #34495e;">${comment.text}</p>
+            <small style="color: #7f8c8d;">👍 ${comment.likes} likes | 💬 ${comment.reply_count} balasan</small>
+        </div>`;
+    });
+    document.getElementById('comments-list').innerHTML = html;
+    
+    // Add event listeners to all process buttons
+    document.querySelectorAll('.btn-process').forEach(button => {
+        button.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            const comment = window.commentsData[index];
+            showPreprocessing(index, comment.text, `@${comment.author}`);
+        });
+    });
+}
+
+function showPreprocessing(index, text, author) {
+    // Show modal
+    document.getElementById('preprocessingModal').style.display = 'block';
+    document.getElementById('modal-comment-author').textContent = `Komentar #${index + 1} oleh ${author}`;
+    document.getElementById('modal-preprocessing-content').innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p style="color: #7f8c8d; margin-top: 15px;">Memproses teks...</p></div>';
+    
+    // Call backend to get preprocessing steps
+    fetch('/preprocess_text', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text: text})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayPreprocessingSteps(data.steps);
+        } else {
+            document.getElementById('modal-preprocessing-content').innerHTML = '<p style="color: #e74c3c; text-align: center;">Gagal memproses teks</p>';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('modal-preprocessing-content').innerHTML = '<p style="color: #e74c3c; text-align: center;">Terjadi kesalahan</p>';
+    });
+}
+
+function displayPreprocessingSteps(steps) {
+    let html = '<div style="display: grid; gap: 15px;">';
+    
+    // Step 1: Original
+    html += `
+        <div class="process-step highlight">
+            <div class="step-title">
+                <span>📝 1. Original Text</span>
+                <span style="background: #856404; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px;">${steps.original_words} kata</span>
+            </div>
+            <div class="step-content">
+                ${steps.original}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 2: Case Folding
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🔤 2. Case Folding</span>
+                <span style="font-size: 11px; color: #7f8c8d;">lowercase</span>
+            </div>
+            <div class="step-content">
+                ${steps.case_folding}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 3: Noise Removal
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🧹 3. Noise Removal</span>
+                <span style="font-size: 11px; color: #7f8c8d;">URL, @, #</span>
+            </div>
+            <div class="step-content">
+                ${steps.noise_removal || steps.case_folding}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 4: Remove Numbers
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🔢 4. Remove Numbers</span>
+                <span style="font-size: 11px; color: #7f8c8d;">digit cleaning</span>
+            </div>
+            <div class="step-content">
+                ${steps.remove_numbers || steps.noise_removal || steps.case_folding}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 5: Remove Punctuation
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>❗ 5. Remove Punctuation</span>
+                <span style="font-size: 11px; color: #7f8c8d;">clean symbols</span>
+            </div>
+            <div class="step-content">
+                ${steps.remove_punctuation || steps.remove_numbers}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 6: Spelling Correction
+    html += `
+        <div class="process-step" style="background: #fff8e1; border-color: #ffc107;">
+            <div class="step-title" style="color: #f57c00;">
+                <span>✏️ 6. Spelling Correction</span>
+                <span style="font-size: 11px; color: #7f8c8d;">typo fix</span>
+            </div>
+            <div class="step-content" style="border-left-color: #ffc107;">
+                ${steps.spelling_correction || steps.remove_punctuation}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 7: Tokenization
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🔪 7. Tokenization</span>
+                <span style="background: #3498db; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px;">${steps.token_count} tokens</span>
+            </div>
+            <div class="step-content">
+                ${Array.isArray(steps.tokenization) ? steps.tokenization.join(', ') : steps.tokenization}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 8: Normalization
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🔄 8. Normalization</span>
+                <span style="font-size: 11px; color: #7f8c8d;">slang → formal</span>
+            </div>
+            <div class="step-content">
+                ${Array.isArray(steps.normalization) ? steps.normalization.join(', ') : steps.normalization}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 9: Stopword Removal
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🚫 9. Stopword Removal</span>
+                <span style="background: #e74c3c; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px;">${steps.tokens_after_stopword} tokens</span>
+            </div>
+            <div class="step-content">
+                ${Array.isArray(steps.stopword_removal) ? steps.stopword_removal.join(', ') : steps.stopword_removal}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 10: Stemming
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>🌱 10. Stemming</span>
+                <span style="font-size: 11px; color: #7f8c8d;">root words</span>
+            </div>
+            <div class="step-content">
+                ${Array.isArray(steps.stemming) ? steps.stemming.join(', ') : steps.stemming}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down">↓</div>';
+    
+    // Step 11: Negation Handling
+    html += `
+        <div class="process-step">
+            <div class="step-title">
+                <span>⚠️ 11. Negation Handling</span>
+                <span style="font-size: 11px; color: #7f8c8d;">NOT_ prefix</span>
+            </div>
+            <div class="step-content">
+                ${Array.isArray(steps.negation_handling) ? steps.negation_handling.join(', ') : steps.negation_handling}
+            </div>
+        </div>
+    `;
+    
+    html += '<div class="arrow-down" style="color: #27ae60; font-size: 32px;">✓</div>';
+    
+    // Step 12: Final Result
+    html += `
+        <div class="process-step final">
+            <div class="step-title" style="color: #155724;">
+                <span>✅ 12. Final Result</span>
+                <div>
+                    <span style="background: #155724; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px; margin-right: 5px;">${steps.final_words} kata</span>
+                    <span style="background: #155724; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px;">↓ ${steps.reduction_rate}%</span>
+                </div>
+            </div>
+            <div class="step-content" style="border-left-color: #28a745; color: #155724; font-weight: 600;">
+                ${steps.final}
+            </div>
+        </div>
+    `;
+    
+    html += '</div>';
+    document.getElementById('modal-preprocessing-content').innerHTML = html;
+}
+
+function closePreprocessingModal() {
+    document.getElementById('preprocessingModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('preprocessingModal');
+    if (event.target == modal) {
+        modal.style.display = 'none';
+    }
+}
+
+loadComments();
+</script>
+{% endblock %}

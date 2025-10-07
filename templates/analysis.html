@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% block title %}Analisis Sentimen{% endblock %}
+
+{% block extra_css %}
+<style>
+    .method-checkbox {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin: 20px 0;
+    }
+
+    .method-checkbox label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .method-checkbox input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
+    .file-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+    }
+
+    .file-item {
+        padding: 15px;
+        background: #f8f9fa;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        border-left: 3px solid #3498db;
+    }
+
+    .file-item:hover {
+        background: #e9ecef;
+    }
+
+    .file-item.selected {
+        background: #d4edda;
+        border-left-color: #27ae60;
+    }
+
+    .file-item h4 {
+        color: #2c3e50;
+        font-size: 14px;
+        margin-bottom: 5px;
+    }
+
+    .file-item p {
+        color: #7f8c8d;
+        font-size: 12px;
+        margin: 3px 0;
+    }
+
+    .wordcloud-container {
+        text-align: center;
+        margin: 20px 0;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .wordcloud-container img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h3 {
+        font-size: 16px;
+        color: #2c3e50;
+        margin-bottom: 15px;
+    }
+
+    .sentiment-bar {
+        margin-bottom: 10px;
+    }
+
+    .bar-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 5px;
+    }
+
+    .bar-container {
+        width: 100%;
+        height: 20px;
+        background-color: #ecf0f1;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .bar-fill {
+        height: 100%;
+        transition: width 0.5s ease;
+    }
+
+    .bar-positive { background-color: #27ae60; }
+    .bar-negative { background-color: #e74c3c; }
+    .bar-neutral { background-color: #95a5a6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Pilih Data Komentar</h2>
+    <div class="alert alert-info" id="info-message" style="display:none;"></div>
+    
+    <div style="margin-bottom: 20px;">
+        <label style="margin-bottom: 10px; display: block;">
+            <input type="radio" name="data-source" value="current" checked> Gunakan data scraping terakhir
+        </label>
+        <label style="display: block;">
+            <input type="radio" name="data-source" value="saved"> Pilih dari file yang tersimpan
+        </label>
+    </div>
+
+    <div id="saved-files-section" style="display:none; margin-top: 20px;">
+        <h3 style="font-size: 16px; margin-bottom: 10px;">File Tersimpan:</h3>
+        <div class="file-list" id="file-list">
+            <p style="text-align: center; color: #7f8c8d;">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Pilih Metode Analisis</h2>
+    <p style="color: #7f8c8d; margin-bottom: 15px;">Pilih metode yang ingin digunakan untuk analisis sentimen:</p>
+    
+    <div class="method-checkbox">
+        <label>
+            <input type="checkbox" name="method" value="naive_bayes" checked>
+            <span>Naive Bayes</span>
+        </label>
+        <label>
+            <input type="checkbox" name="method" value="svm" checked>
+            <span>SVM</span>
+        </label>
+        <label>
+            <input type="checkbox" name="method" value="lstm" checked>
+            <span>LSTM</span>
+        </label>
+        <label>
+            <input type="checkbox" name="method" value="indobert" checked>
+            <span>IndoBERT</span>
+        </label>
+    </div>
+    
+    <button class="btn" id="analyze-btn" onclick="startAnalysis()">Mulai Analisis</button>
+    <button class="btn btn-success" id="export-btn" onclick="exportData()" style="display:none; margin-left: 10px;">Export Excel</button>
+</div>
+
+<div class="loading" id="loading" style="display:none;">
+    <div class="spinner"></div>
+    <p style="margin-top: 10px;">Sedang menganalisis sentimen...</p>
+</div>
+
+<div id="results" style="display:none;">
+    <div class="card" id="wordcloud-section">
+        <h2>Word Cloud</h2>
+        <div class="wordcloud-container" id="wordcloud-container"></div>
+    </div>
+
+    <div class="card">
+        <h2>Hasil Analisis Sentimen</h2>
+        <div class="stats-grid" id="stats-grid"></div>
+    </div>
+</div>
+
+<script>
+let selectedFile = null;
+let currentComments = null;
+
+// Load saved files when radio button changes
+document.querySelectorAll('input[name="data-source"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'saved') {
+            document.getElementById('saved-files-section').style.display = 'block';
+            loadSavedFiles();
+        } else {
+            document.getElementById('saved-files-section').style.display = 'none';
+            selectedFile = null;
+        }
+    });
+});
+
+async function loadSavedFiles() {
+    try {
+        const response = await fetch('/saved_files');
+        const data = await response.json();
+        
+        const fileList = document.getElementById('file-list');
+        if (data.files.length === 0) {
+            fileList.innerHTML = '<p style="text-align: center; color: #7f8c8d;">Belum ada file tersimpan</p>';
+            return;
+        }
+        
+        fileList.innerHTML = '';
+        data.files.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.onclick = () => selectFile(file.filename, fileItem);
+            fileItem.innerHTML = `
+                <h4>${file.video_title}</h4>
+                <p>Video ID: ${file.video_id}</p>
+                <p>Komentar: ${file.total_comments} | Disimpan: ${new Date(file.scraped_at).toLocaleString('id-ID')}</p>
+            `;
+            fileList.appendChild(fileItem);
+        });
+    } catch (error) {
+        console.error('Error loading files:', error);
+    }
+}
+
+function selectFile(filename, element) {
+    // Remove selected class from all items
+    document.querySelectorAll('.file-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    // Add selected class to clicked item
+    element.classList.add('selected');
+    selectedFile = filename;
+    
+    document.getElementById('info-message').textContent = `File "${filename}" dipilih`;
+    document.getElementById('info-message').style.display = 'block';
+}
+
+async function startAnalysis() {
+    const dataSource = document.querySelector('input[name="data-source"]:checked').value;
+    const selectedMethods = Array.from(document.querySelectorAll('input[name="method"]:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedMethods.length === 0) {
+        alert('Pilih minimal satu metode analisis!');
+        return;
+    }
+    
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('analyze-btn').disabled = true;
+    
+    try {
+        // Get comments data
+        let comments;
+        if (dataSource === 'saved') {
+            if (!selectedFile) {
+                alert('Pilih file terlebih dahulu!');
+                return;
+            }
+            const fileResponse = await fetch(`/load_file/${selectedFile}`);
+            const fileData = await fileResponse.json();
+            if (!fileData.success) {
+                throw new Error('Gagal memuat file');
+            }
+            comments = fileData.data.comments;
+        } else {
+            const response = await fetch('/get_scraped_data');
+            const data = await response.json();
+            if (!data.success) {
+                alert('Belum ada data. Lakukan scraping terlebih dahulu!');
+                window.location.href = '/';
+                return;
+            }
+            comments = data.data.comments;
+        }
+        
+        currentComments = comments;
+        
+        // Analyze
+        const analyzeResponse = await fetch('/analyze', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                comments: comments,
+                methods: selectedMethods
+            })
+        });
+        
+        const result = await analyzeResponse.json();
+        if (!result.success) {
+            throw new Error(result.error || 'Gagal melakukan analisis');
+        }
+        
+        displayResults(result);
+        document.getElementById('export-btn').style.display = 'inline-block';
+        
+        // Load wordcloud asynchronously (lazy loading)
+        loadWordclouds();
+        
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('analyze-btn').disabled = false;
+    }
+}
+
+async function loadWordclouds() {
+    try {
+        const wordcloudContainer = document.getElementById('wordcloud-container');
+        wordcloudContainer.innerHTML = '<h3 style="margin-bottom: 20px;">Word Clouds Berdasarkan Sentimen</h3><p style="color: #7f8c8d;">Memuat wordclouds...</p>';
+        
+        const response = await fetch('/generate_wordcloud', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        
+        const data = await response.json();
+        if (!data.success) {
+            wordcloudContainer.innerHTML += '<p style="color: #e74c3c;">Gagal memuat wordcloud</p>';
+            return;
+        }
+        
+        displayWordclouds(data);
+    } catch (error) {
+        console.error('Error loading wordclouds:', error);
+    }
+}
+
+function displayWordclouds(data) {
+    const wordcloudContainer = document.getElementById('wordcloud-container');
+    wordcloudContainer.innerHTML = '<h3 style="margin-bottom: 20px;">Word Clouds Berdasarkan Sentimen</h3>';
+    
+    const wordcloudGrid = document.createElement('div');
+    wordcloudGrid.style.display = 'grid';
+    wordcloudGrid.style.gridTemplateColumns = '1fr 1fr';
+    wordcloudGrid.style.gap = '20px';
+    wordcloudGrid.style.marginTop = '20px';
+    
+    if (data.wordcloud_positive) {
+        const positiveDiv = document.createElement('div');
+        positiveDiv.style.textAlign = 'center';
+        positiveDiv.innerHTML = `
+            <h4 style="color: #27ae60; margin-bottom: 10px;">Komentar Positif (${data.positive_count})</h4>
+            <img src="${data.wordcloud_positive}" alt="Positive Word Cloud" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        `;
+        wordcloudGrid.appendChild(positiveDiv);
+    } else {
+        const positiveDiv = document.createElement('div');
+        positiveDiv.style.textAlign = 'center';
+        positiveDiv.innerHTML = '<p style="color: #95a5a6; padding: 40px;">Tidak ada komentar positif</p>';
+        wordcloudGrid.appendChild(positiveDiv);
+    }
+    
+    if (data.wordcloud_negative) {
+        const negativeDiv = document.createElement('div');
+        negativeDiv.style.textAlign = 'center';
+        negativeDiv.innerHTML = `
+            <h4 style="color: #e74c3c; margin-bottom: 10px;">Komentar Negatif (${data.negative_count})</h4>
+            <img src="${data.wordcloud_negative}" alt="Negative Word Cloud" style="width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        `;
+        wordcloudGrid.appendChild(negativeDiv);
+    } else {
+        const negativeDiv = document.createElement('div');
+        negativeDiv.style.textAlign = 'center';
+        negativeDiv.innerHTML = '<p style="color: #95a5a6; padding: 40px;">Tidak ada komentar negatif</p>';
+        wordcloudGrid.appendChild(negativeDiv);
+    }
+    
+    wordcloudContainer.appendChild(wordcloudGrid);
+}
+
+function displayResults(data) {
+    // Display accuracy if available
+    if (data.accuracy) {
+        const accuracyDiv = document.createElement('div');
+        accuracyDiv.style.cssText = 'background: #e8f5e9; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #27ae60;';
+        
+        let accuracyHTML = '<h3 style="color: #27ae60; margin-bottom: 15px;">📊 Akurasi Metode (Agreement Rate)</h3>';
+        accuracyHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">';
+        
+        for (const [method, accuracy] of Object.entries(data.accuracy)) {
+            const methodName = method.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const color = accuracy >= 80 ? '#27ae60' : accuracy >= 60 ? '#f39c12' : '#e74c3c';
+            
+            accuracyHTML += `
+                <div style="background: white; padding: 15px; border-radius: 6px; text-align: center; border: 2px solid ${color};">
+                    <div style="font-weight: bold; color: #2c3e50; margin-bottom: 8px;">${methodName}</div>
+                    <div style="font-size: 28px; font-weight: bold; color: ${color};">${accuracy}%</div>
+                    <div style="font-size: 12px; color: #7f8c8d; margin-top: 5px;">Agreement</div>
+                </div>
+            `;
+        }
+        
+        accuracyHTML += '</div>';
+        accuracyHTML += '<p style="font-size: 12px; color: #7f8c8d; margin-top: 10px; text-align: center;">*Akurasi dihitung berdasarkan kesepakatan dengan majority vote dari semua metode</p>';
+        accuracyDiv.innerHTML = accuracyHTML;
+        
+        const statsGrid = document.getElementById('stats-grid');
+        statsGrid.parentNode.insertBefore(accuracyDiv, statsGrid);
+    }
+    
+    // Display confusion matrices if available
+    if (data.confusion_matrices) {
+        const cmDiv = document.createElement('div');
+        cmDiv.style.cssText = 'margin: 30px 0;';
+        
+        let cmHTML = '<h3 style="color: #2c3e50; margin-bottom: 20px;">🎯 Confusion Matrix</h3>';
+        cmHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">';
+        
+        for (const [method, imageBase64] of Object.entries(data.confusion_matrices)) {
+            const methodName = method.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            cmHTML += `
+                <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h4 style="text-align: center; color: #2c3e50; margin-bottom: 15px;">${methodName}</h4>
+                    <img src="data:image/png;base64,${imageBase64}" style="width: 100%; height: auto; border-radius: 4px;">
+                </div>
+            `;
+        }
+        
+        cmHTML += '</div>';
+        cmDiv.innerHTML = cmHTML;
+        
+        const statsGrid = document.getElementById('stats-grid');
+        statsGrid.parentNode.insertBefore(cmDiv, statsGrid);
+    }
+    
+    // Display stats for each method
+    for (const [method, stats] of Object.entries(data.summary)) {
+        const total = stats.positive + stats.negative + stats.neutral;
+        if (total === 0) continue;
+        
+        const positivePercent = (stats.positive / total * 100).toFixed(1);
+        const negativePercent = (stats.negative / total * 100).toFixed(1);
+        const neutralPercent = (stats.neutral / total * 100).toFixed(1);
+        
+        const card = document.createElement('div');
+        card.className = 'stat-card';
+        card.innerHTML = `
+            <h3>${method}</h3>
+            <div class="sentiment-bar">
+                <div class="bar-label">
+                    <span>Positif</span>
+                    <span>${stats.positive} (${positivePercent}%)</span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar-fill bar-positive" style="width: ${positivePercent}%"></div>
+                </div>
+            </div>
+            <div class="sentiment-bar">
+                <div class="bar-label">
+                    <span>Negatif</span>
+                    <span>${stats.negative} (${negativePercent}%)</span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar-fill bar-negative" style="width: ${negativePercent}%"></div>
+                </div>
+            </div>
+            <div class="sentiment-bar">
+                <div class="bar-label">
+                    <span>Netral</span>
+                    <span>${stats.neutral} (${neutralPercent}%)</span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar-fill bar-neutral" style="width: ${neutralPercent}%"></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('stats-grid').appendChild(card);
+    }
+    
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+function exportData() {
+    window.open('/export', '_blank');
+}
+</script>
+{% endblock %}

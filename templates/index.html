@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Scraping Komentar{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Scraping Komentar YouTube</h2>
+    <p style="color: #7f8c8d; margin-bottom: 20px;">Ambil komentar dari video YouTube untuk dianalisis</p>
+    
+    <div class="alert alert-error" id="error-message"></div>
+    
+    <form id="scrape-form">
+        <div class="form-group">
+            <label for="video-url">URL Video YouTube</label>
+            <input type="text" id="video-url" placeholder="https://www.youtube.com/watch?v=..." required>
+        </div>
+        
+        <div class="form-group">
+            <label for="max-comments">Jumlah Komentar</label>
+            <input type="number" id="max-comments" value="100" min="1" max="500" required>
+        </div>
+        
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="include-replies" style="width: auto; cursor: pointer;">
+            <label for="include-replies" style="cursor: pointer; margin: 0;">
+                Sertakan balasan komentar (replies)
+            </label>
+        </div>
+        
+        <button type="submit" class="btn" id="scrape-btn">Mulai Scraping</button>
+    </form>
+</div>
+
+<div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p style="margin-top: 10px;">Mengambil komentar...</p>
+</div>
+
+<div class="card" id="result-section" style="display:none;">
+    <h2>Hasil Scraping</h2>
+    <div class="alert alert-success" id="save-message" style="display:none;"></div>
+    <div id="video-info"></div>
+    <div id="comments-preview"></div>
+    <div style="margin-top: 20px;">
+        <a href="/analysis" class="btn btn-success">Analisis Sentimen</a>
+        <a href="/comments" class="btn btn-secondary">Lihat Semua Komentar</a>
+    </div>
+</div>
+
+<script>
+document.getElementById('scrape-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('scrape-btn').disabled = true;
+    
+    try {
+        const response = await fetch('/scrape', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                video_url: document.getElementById('video-url').value,
+                max_comments: document.getElementById('max-comments').value,
+                include_replies: document.getElementById('include-replies').checked
+            })
+        });
+        
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        
+        document.getElementById('video-info').innerHTML = `
+            <p><strong>Video:</strong> ${data.video_info ? data.video_info.title : 'N/A'}</p>
+            <p><strong>Total Komentar:</strong> ${data.total_comments}</p>
+        `;
+        
+        // Show save message
+        document.getElementById('save-message').textContent = 
+            `Data berhasil disimpan sebagai: ${data.saved_filename}`;
+        document.getElementById('save-message').style.display = 'block';
+        
+        document.getElementById('result-section').style.display = 'block';
+    } catch (error) {
+        document.getElementById('error-message').textContent = error.message;
+        document.getElementById('error-message').style.display = 'block';
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('scrape-btn').disabled = false;
+    }
+});
+</script>
+{% endblock %}
