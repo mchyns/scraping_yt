@@ -40,43 +40,27 @@ Sistem analisis sentimen komentar YouTube menggunakan **Machine Learning** dan *
 
 ## ✨ Fitur Utama
 
-2. Install dependencies:
-
-### 1. **Scraping Komentar YouTube**```bash
-
-- Input URL video YouTubepip install -r requirements.txt
-
-- Scraping otomatis menggunakan YouTube Data API v3```
-
+### 1. **Scraping Komentar YouTube**
+- Input URL video YouTube
+- Scraping otomatis menggunakan YouTube Data API v3
+- **Support hingga 100,000 komentar sekaligus** dengan pagination otomatis
 - Ambil komentar beserta metadata (likes, replies, author)
+- Progress tracking real-time dengan progress bar
+- Save data ke JSON untuk analisis ulang
+- Optional: Include replies (balasan komentar)
+- Deteksi otomatis jumlah komentar tersedia di video
 
-- Support pagination untuk komentar banyak3. Pastikan file `.env` sudah berisi API Key YouTube Anda:
-
-- Save data ke JSON untuk analisis ulang```
-
-YOUTUBE_API_KEY=AIzaSyBclvyzII7a2LuTN8ova6DuOer2mKMzQ38
-
-### 2. **Analisis Sentimen Multi-Method**```
-
+### 2. **Analisis Sentimen Multi-Method**
 4 metode machine learning yang berbeda:
+- ✅ **Naive Bayes Classifier** - Probabilistic classifier
+- ✅ **Support Vector Machine (SVM)** - Linear classification  
+- ✅ **LSTM** - Deep learning untuk sekuensial
+- ✅ **IndoBERT** - Transformer model untuk Bahasa Indonesia
 
-- ✅ **Naive Bayes Classifier** - Probabilistic classifier## Cara Menggunakan
-
-- ✅ **Support Vector Machine (SVM)** - Linear classification
-
-- ✅ **LSTM** - Deep learning untuk sekuensial1. Jalankan aplikasi Flask:
-
-- ✅ **IndoBERT** - Transformer model untuk Bahasa Indonesia```bash
-
-python app.py
-
-### 3. **Preprocessing Text Advanced**```
-
+### 3. **Preprocessing Text Advanced**
 12 langkah preprocessing otomatis:
-
-1. Original Text2. Buka browser dan akses:
-
-2. Case Folding (lowercase)```
+1. Original Text
+2. Case Folding (lowercase)
 
 3. Noise Removal (URL, @mentions, #hashtags)http://localhost:5000
 

@@ -61,12 +61,23 @@ class YouTubeScraper:
             print(f"Error getting video info: {e}")
             return None
     
-    def get_comments(self, video_id, max_results=100, include_replies=False):
+    def get_comments(self, video_id, max_results=100, include_replies=False, progress_callback=None):
         """
         Get comments from a YouTube video
+        Supports up to 100,000 comments with pagination
+        
+        Args:
+            video_id: YouTube video ID
+            max_results: Maximum number of comments (max 100000)
+            include_replies: Include reply comments
+            progress_callback: Function to report progress (current, total)
         """
         comments = []
         next_page_token = None
+        page_count = 0
+        
+        # Limit max_results to 100000
+        max_results = min(max_results, 100000)
         
         try:
             url = f"{self.base_url}/commentThreads"
@@ -75,18 +86,24 @@ class YouTubeScraper:
             }
             
             while len(comments) < max_results:
+                page_count += 1
+                
+                # Calculate optimal batch size (max 100 per request)
+                batch_size = min(100, max_results - len(comments))
+                
                 params = {
                     'part': 'snippet,replies',
                     'videoId': video_id,
-                    'maxResults': min(100, max_results - len(comments)),
+                    'maxResults': batch_size,
                     'textFormat': 'plainText',
-                    'order': 'relevance',
+                    'order': 'relevance',  # relevance, time
                     'key': self.api_key
                 }
                 
                 if next_page_token:
                     params['pageToken'] = next_page_token
                 
+                # Make API request
                 response = requests.get(url, params=params, headers=headers)
                 
                 # Check for errors
@@ -96,13 +113,21 @@ class YouTubeScraper:
                         error_reason = error_data['error'].get('errors', [{}])[0].get('reason', '')
                         if error_reason == 'commentsDisabled':
                             print("Error: Komentar dinonaktifkan untuk video ini")
-                            return []
+                            return comments if comments else []
+                        elif error_reason == 'quotaExceeded':
+                            print(f"Warning: Quota exceeded. Returning {len(comments)} comments")
+                            return comments
                 
                 response.raise_for_status()
                 data = response.json()
                 
-                # Extract comments
-                for item in data.get('items', []):
+                # Extract comments from current page
+                items = data.get('items', [])
+                if not items:
+                    print(f"No more comments found. Total: {len(comments)}")
+                    break
+                
+                for item in items:
                     comment = item['snippet']['topLevelComment']['snippet']
                     comment_data = {
                         'author': comment['authorDisplayName'],
@@ -127,22 +152,37 @@ class YouTubeScraper:
                     
                     comments.append(comment_data)
                     
+                    # Report progress
+                    if progress_callback:
+                        progress_callback(len(comments), max_results)
+                    
                     if len(comments) >= max_results:
                         break
                 
                 # Check for next page
                 next_page_token = data.get('nextPageToken')
-                if not next_page_token or len(comments) >= max_results:
+                if not next_page_token:
+                    print(f"Reached end of available comments. Total: {len(comments)}")
                     break
+                
+                # Progress info
+                print(f"Page {page_count}: Fetched {len(comments)}/{max_results} comments")
             
+            print(f"Successfully fetched {len(comments)} comments in {page_count} pages")
             return comments
             
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
-                print("Error: Komentar dinonaktifkan untuk video ini atau API key tidak valid")
+                error_msg = "Komentar dinonaktifkan untuk video ini atau API key tidak valid"
+                print(f"Error: {error_msg}")
+            elif e.response.status_code == 400:
+                print("Error: Invalid request. Check video ID")
             else:
-                print(f"Error getting comments: {e}")
-            return []
+                print(f"HTTP Error {e.response.status_code}: {e}")
+            
+            # Return comments collected so far
+            return comments if comments else []
+            
         except Exception as e:
             print(f"Error getting comments: {e}")
-            return []
+            return comments if comments else []

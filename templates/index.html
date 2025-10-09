@@ -17,7 +17,10 @@
         
         <div class="form-group">
             <label for="max-comments">Jumlah Komentar</label>
-            <input type="number" id="max-comments" value="100" min="1" max="500" required>
+            <input type="number" id="max-comments" value="100" min="1" max="100000" required>
+            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                Maksimal 100,000 komentar. Semakin banyak semakin lama prosesnya.
+            </small>
         </div>
         
         <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
@@ -33,7 +36,13 @@
 
 <div class="loading" id="loading">
     <div class="spinner"></div>
-    <p style="margin-top: 10px;">Mengambil komentar...</p>
+    <p style="margin-top: 10px;" id="loading-text">Mengambil komentar...</p>
+    <div style="width: 300px; margin: 15px auto;">
+        <div style="background: #ecf0f1; border-radius: 10px; overflow: hidden; height: 20px;">
+            <div id="progress-bar" style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: 0%; transition: width 0.3s;"></div>
+        </div>
+        <p id="progress-text" style="margin-top: 5px; font-size: 14px; color: #7f8c8d;">0 / 0 komentar</p>
+    </div>
 </div>
 
 <div class="card" id="result-section" style="display:none;">
@@ -48,11 +57,56 @@
 </div>
 
 <script>
+let progressInterval = null;
+
+// Function to update progress bar
+async function updateProgress() {
+    try {
+        const response = await fetch('/progress');
+        const data = await response.json();
+        
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const loadingText = document.getElementById('loading-text');
+        
+        if (data.total > 0) {
+            const percentage = (data.current / data.total) * 100;
+            progressBar.style.width = percentage + '%';
+            
+            // Show available comments info if known
+            if (data.available && data.available > 0) {
+                progressText.textContent = `${data.current} / ${data.total} komentar (tersedia: ${data.available})`;
+            } else {
+                progressText.textContent = `${data.current} / ${data.total} komentar`;
+            }
+            
+            loadingText.textContent = data.message;
+        }
+        
+        // Stop polling if completed or error
+        if (data.status === 'completed' || data.status === 'error') {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+    } catch (error) {
+        console.error('Error fetching progress:', error);
+    }
+}
+
 document.getElementById('scrape-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     document.getElementById('loading').style.display = 'block';
     document.getElementById('result-section').style.display = 'none';
+    document.getElementById('error-message').style.display = 'none';
     document.getElementById('scrape-btn').disabled = true;
+    
+    // Reset progress
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-text').textContent = '0 / 0 komentar';
+    document.getElementById('loading-text').textContent = 'Memulai scraping...';
+    
+    // Start progress polling
+    progressInterval = setInterval(updateProgress, 500); // Poll every 500ms
     
     try {
         const response = await fetch('/scrape', {
@@ -68,10 +122,30 @@ document.getElementById('scrape-form').addEventListener('submit', async (e) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
         
-        document.getElementById('video-info').innerHTML = `
+        // Build video info HTML
+        let videoInfoHtml = `
             <p><strong>Video:</strong> ${data.video_info ? data.video_info.title : 'N/A'}</p>
-            <p><strong>Total Komentar:</strong> ${data.total_comments}</p>
+            <p><strong>Komentar Diambil:</strong> ${data.total_comments} dari ${data.requested_comments} yang diminta</p>
         `;
+        
+        // Add available comments info if known
+        if (data.available_comments > 0) {
+            videoInfoHtml += `<p><strong>Total Komentar di Video:</strong> ${data.available_comments}</p>`;
+        }
+        
+        document.getElementById('video-info').innerHTML = videoInfoHtml;
+        
+        // Show warning if got less than requested
+        if (data.warning) {
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'alert';
+            warningDiv.style.background = '#fff3cd';
+            warningDiv.style.color = '#856404';
+            warningDiv.style.borderLeft = '4px solid #ffc107';
+            warningDiv.style.marginBottom = '15px';
+            warningDiv.innerHTML = `<strong>⚠️ Info:</strong> ${data.warning}`;
+            document.getElementById('video-info').insertBefore(warningDiv, document.getElementById('video-info').firstChild);
+        }
         
         // Show save message
         document.getElementById('save-message').textContent = 
@@ -83,6 +157,12 @@ document.getElementById('scrape-form').addEventListener('submit', async (e) => {
         document.getElementById('error-message').textContent = error.message;
         document.getElementById('error-message').style.display = 'block';
     } finally {
+        // Stop progress polling
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        
         document.getElementById('loading').style.display = 'none';
         document.getElementById('scrape-btn').disabled = false;
     }

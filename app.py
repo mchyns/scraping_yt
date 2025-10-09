@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, session
+from flask import Flask, render_template, request, jsonify, send_file, session, Response
 from youtube_scraper import YouTubeScraper
 from sentiment_analyzer import SentimentAnalyzer
 from data_storage import DataStorage
@@ -8,6 +8,9 @@ import pandas as pd
 from io import BytesIO
 import json
 import base64
+import time
+from queue import Queue
+import threading
 
 load_dotenv()
 
@@ -24,6 +27,14 @@ storage = DataStorage()
 app_data = {
     'scraped_data': None,
     'analysis_results': None
+}
+
+# Progress tracking
+progress_data = {
+    'current': 0,
+    'total': 0,
+    'status': 'idle',
+    'message': ''
 }
 
 @app.route('/')
@@ -54,6 +65,9 @@ def scrape_comments():
         max_comments = int(data.get('max_comments', 100))
         include_replies = data.get('include_replies', False)
         
+        # Limit to 100000
+        max_comments = min(max_comments, 100000)
+        
         if not video_url:
             return jsonify({'error': 'URL video tidak boleh kosong'}), 400
         
@@ -65,11 +79,41 @@ def scrape_comments():
         # Get video info
         video_info = scraper.get_video_info(video_id)
         
+        # Check available comments in video
+        available_comments = int(video_info.get('comments', 0)) if video_info else 0
+        
+        # Reset progress
+        progress_data['current'] = 0
+        progress_data['total'] = max_comments
+        progress_data['status'] = 'scraping'
+        progress_data['message'] = 'Memulai scraping...'
+        progress_data['available'] = available_comments
+        
+        # Progress callback
+        def update_progress(current, total):
+            progress_data['current'] = current
+            progress_data['total'] = total
+            progress_data['available'] = available_comments
+            progress_data['message'] = f'Mengambil komentar {current}/{total}...'
+        
         # Scrape comments (with or without replies)
-        comments_data = scraper.get_comments(video_id, max_results=max_comments, include_replies=include_replies)
+        comments_data = scraper.get_comments(
+            video_id, 
+            max_results=max_comments, 
+            include_replies=include_replies,
+            progress_callback=update_progress
+        )
         
         if not comments_data:
+            progress_data['status'] = 'error'
+            progress_data['message'] = 'Tidak ada komentar ditemukan'
             return jsonify({'error': 'Tidak ada komentar ditemukan'}), 404
+        
+        # Check if we got less than requested
+        got_less = len(comments_data) < max_comments
+        warning_message = None
+        if got_less and available_comments > 0:
+            warning_message = f'Video ini hanya memiliki {len(comments_data)} komentar dari {max_comments} yang diminta. Semua komentar yang tersedia sudah diambil.'
         
         # Save to file
         filename = storage.save_comments(video_id, video_info, comments_data)
@@ -82,22 +126,39 @@ def scrape_comments():
             'comments': comments_data,
             'total_comments': len(comments_data),
             'saved_filename': filename,
-            'include_replies': include_replies
+            'include_replies': include_replies,
+            'requested_comments': max_comments,
+            'available_comments': available_comments
         }
         app_data['analysis_results'] = None  # Reset analysis
+        
+        # Update progress
+        progress_data['status'] = 'completed'
+        progress_data['current'] = len(comments_data)
+        progress_data['message'] = f'Selesai! {len(comments_data)} komentar berhasil diambil'
         
         return jsonify({
             'success': True,
             'video_id': video_id,
             'video_info': video_info,
             'total_comments': len(comments_data),
+            'requested_comments': max_comments,
+            'available_comments': available_comments,
             'comments': comments_data,
             'saved_filename': filename,
-            'include_replies': include_replies
+            'include_replies': include_replies,
+            'warning': warning_message
         })
         
     except Exception as e:
+        progress_data['status'] = 'error'
+        progress_data['message'] = f'Error: {str(e)}'
         return jsonify({'error': str(e)}), 500
+
+@app.route('/progress')
+def get_progress():
+    """Endpoint to get scraping progress"""
+    return jsonify(progress_data)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
