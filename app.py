@@ -238,8 +238,12 @@ def generate_wordcloud():
 
 @app.route('/saved_files', methods=['GET'])
 def get_saved_files():
-    files = storage.get_saved_files()
-    return jsonify({'success': True, 'files': files})
+    try:
+        files = storage.get_saved_files()
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        print(f"Error getting saved files: {e}")
+        return jsonify({'success': True, 'files': []})
 
 @app.route('/load_file/<filename>', methods=['GET'])
 def load_file(filename):

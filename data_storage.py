@@ -34,27 +34,38 @@ class DataStorage:
         Get list of all saved comment files
         """
         files = []
+        
+        # Ensure storage directory exists
         if not os.path.exists(self.storage_dir):
-            return files
+            try:
+                os.makedirs(self.storage_dir)
+            except Exception as e:
+                print(f"Error creating storage directory: {e}")
+                return files
         
-        for filename in os.listdir(self.storage_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(self.storage_dir, filename)
-                try:
-                    with open(filepath, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                        files.append({
-                            'filename': filename,
-                            'video_id': data.get('video_id', 'Unknown'),
-                            'video_title': data.get('video_info', {}).get('title', 'Unknown'),
-                            'total_comments': data.get('total_comments', 0),
-                            'scraped_at': data.get('scraped_at', 'Unknown')
-                        })
-                except:
-                    continue
+        try:
+            for filename in os.listdir(self.storage_dir):
+                if filename.endswith('.json'):
+                    filepath = os.path.join(self.storage_dir, filename)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            files.append({
+                                'filename': filename,
+                                'video_id': data.get('video_id', 'Unknown'),
+                                'video_title': data.get('video_info', {}).get('title', 'Unknown'),
+                                'total_comments': data.get('total_comments', 0),
+                                'scraped_at': data.get('scraped_at', 'Unknown')
+                            })
+                    except Exception as e:
+                        print(f"Error reading file {filename}: {e}")
+                        continue
+            
+            # Sort by scraped date (newest first)
+            files.sort(key=lambda x: x['scraped_at'], reverse=True)
+        except Exception as e:
+            print(f"Error listing files: {e}")
         
-        # Sort by scraped date (newest first)
-        files.sort(key=lambda x: x['scraped_at'], reverse=True)
         return files
     
     def load_comments(self, filename):
